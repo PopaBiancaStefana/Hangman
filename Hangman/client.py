@@ -35,12 +35,11 @@ def main():
         # the side player only receives messages from know
         while True:
             data = client.recv(2048)
-            if data.decode("utf-8") == "end of game":
+            if data.decode("utf-8").endswith("end of game"):
                 break
 
             print(data.decode("utf-8"))
-           
-            
+                  
 
     else:
 
@@ -50,8 +49,11 @@ def main():
             data = client.recv(2048)
             print(data.decode("utf-8"))
 
+            if data.decode("utf-8").endswith("end of game"):
+                break
+
             # send data
-            msg = input("Enter a message: ")
+            msg = input("\nEnter the quess: ")
 
             if msg == "exit":
                 break

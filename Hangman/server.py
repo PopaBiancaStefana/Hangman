@@ -11,6 +11,9 @@ guess_player = -1
 word = ""
 description = ""
 game_running = False
+limit = 5
+display = ""
+already_guessed = []
 
 
 def main():
@@ -89,11 +92,14 @@ def handle_side_player(client):
             print("Description: " + description)
         
         
-        if guess_player != -1:
+        if guess_player == -1:
             reply = "You have to wait for the guess player to guess the word"
             client.sendall(str.encode(reply))
+            while guess_player == -1:
+                time.sleep(1)
+         
 
-        # disconect when guess player disconnects
+        # disconect when guess player disconnects or game is over
         while guess_player != -1:
             time.sleep(1)
 
@@ -109,7 +115,12 @@ def handle_guess_player(client):
     global nr_of_clients
     global guess_player
     global game_running
+    global limit
+    global word
+    global description
+    global display
 
+    game_running = True
     client.send(str.encode("\nWelcome to the \n\n" + welcome_text + "   game\n\nYou are the guess player.\nYou have to guess the word.\nYou have 5 lives.\n\nIf you get stuck, type 'hint' to get a short definition.\n\nYou may have to wait for the side player to give you a word."))
     client.send(str.encode("guess player"))
 
@@ -117,32 +128,78 @@ def handle_guess_player(client):
     while not word or not description:
         time.sleep(1)
 
-    client.send(str.encode("You can now guess the word: "))
-    game_running = True
+    display = "_" * len(word)
+    client.send(str.encode("You can now guess the word: " + display + " " + str(limit) + " lives left"))
+  
     while True:
-
         data = client.recv(2048)
 
+        # guess player disconnected 
         if not data:
-            side_player.sendall(str.encode("Sorry, guess player disconnected"))
+            side_player.sendall(str.encode("Guess player is out"))
             side_player.sendall(str.encode("end of game"))
             game_running = False
             break
         
+        # guess player wants a hint
         if data.decode("utf-8") == "hint":
             reply = "Hint: " + description
-        
+
         else:
-
-            side_player.sendall(str.encode(data.decode("utf-8")))
-            reply = "Server output: " + data.decode("utf-8")
-
+            reply = evaluate_guess(data.decode("utf-8"))
+            # the side player watches the game
+            side_player.sendall(str.encode(reply))
+            
+        print(reply)
         client.sendall(str.encode(reply))
 
+        if game_running == False:
+            break
+
+    limit = 5
+    display = ""
+    word = ""
+    description = ""
     guess_player = -1
     nr_of_clients -= 1
     print("Client disconnected")
     client.close()
+
+
+
+def evaluate_guess(guess):
+    global word
+    global game_running
+    global display
+    global limit
+
+    if len(guess.strip()) == 0 or len(guess.strip()) >= 2 or guess <= "9":
+        return "\nInvalid Input, Try a letter\n" + display + " " + str(limit) + " lives left"
+
+    if guess in already_guessed:
+        return "\nLetter already guessed.\n " + display + " " + str(limit) + " lives left"
+
+    elif guess in word:
+        already_guessed.extend([guess])
+        for index in range(len(word)):
+            if word[index] == guess:
+                display = display[:index] + guess + display[index + 1:]
+
+        if "_" not in display:
+            game_running = False
+            return "\nWinner! The word is: " + display + "\nend of game"
+
+        return "\n" + display + " " + str(limit) + " lives left"
+
+    else:
+        already_guessed.extend([guess])
+        limit -= 1
+        if limit == 0:
+            game_running = False
+            return "\nLoser! The word was: " + word + "\nend of game"
+
+        return "\n" + display + " " + str(limit) + " lives left"
+
 
 
 
