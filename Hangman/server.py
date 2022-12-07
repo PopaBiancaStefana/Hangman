@@ -81,7 +81,6 @@ def handle_side_player(client):
     global side_player
     global guess_player
     global word
-    global game_running
     global description
 
     client.send(str.encode("side player"))

@@ -34,7 +34,7 @@ def main():
 
             # get word
             word = input("Enter the word: ")
-            while(not isWord(word)):
+            while(not word.isalpha()):
                 word = input("Enter the word: ")
             client.send(str.encode(word))
 
@@ -70,9 +70,6 @@ def main():
     # close connection to server
     client.close()
     
-def isWord(word):
-    return True
-
 
 if __name__ == "__main__":
     main()
