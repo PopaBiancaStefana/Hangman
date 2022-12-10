@@ -15,6 +15,7 @@ game_running = False
 limit = 5
 display = ""
 already_guessed = []
+reset = False
 
 
 def main():
@@ -63,7 +64,7 @@ def threaded_client(client):
     global side_player
     global guess_player
 
-    if (nr_of_clients == 1 or side_player == -1):
+    if (nr_of_clients == 1):
         side_player = client
         player_type = "side"
     else:
@@ -81,30 +82,46 @@ def handle_side_player(client):
     global side_player
     global guess_player
     global word
+    global reset
     global description
 
-    client.send(str.encode("side player"))
-
-    if(guess_player == -1):
-        client.send(str.encode("Welcome to the \n\n" + welcome_text + "   game\n\nYou are the side player.\nPlease enter a word and a short description and wait for guess player to connect."))
+    client.send(str.encode("side player"))  
+    client.send(str.encode("Welcome to the \n\n" + welcome_text + "   game\n\nYou are the side player.\nPlease enter a word and a short description and wait for guess player to connect."))
         
-        data = client.recv(2048)
-        if data:
-            word = data.decode("utf-8")
-            print("Word: " + word)
+    data = client.recv(2048)
+    if data:
+        word = data.decode("utf-8")
+        print("Word: " + word)
       
-        data = client.recv(2048)   
-        if(data):
-            description = data.decode("utf-8")
-            print("Description: " + description)   
+    data = client.recv(2048)   
+    if(data):
+        description = data.decode("utf-8")
+        print("Description: " + description)   
 
-        while(guess_player == -1):
-            time.sleep(1)
-        client.send(str.encode("Word and description received and guess player connected.Thank you!"))
+    # wait for guess player to connect
+    while(guess_player == -1):
+        time.sleep(1)
 
-    else:
-        client.send(str.encode("Welcome to the \n\n" + welcome_text + "   game\n\nYou are the side player.\nUnfortunately, the guess player is already in a game.\nPlease come back later."))
-       
+    while(game_running):
+        time.sleep(1)
+        if(reset == True):
+            reset = False
+            # send word and description to guess player
+            client.send(str.encode("Reset game. Please enter a word and a short description"))
+            
+            data = client.recv(2048)
+            if data:
+                word = data.decode("utf-8")
+                print("Word: " + word)
+      
+            data = client.recv(2048)   
+            if(data):
+                description = data.decode("utf-8")
+                print("Description: " + description)
+
+        
+    client.send(str.encode("End of game.The guess player has disconnected."))
+
     side_player = -1
     nr_of_clients -= 1
     print("Client disconnected")
@@ -125,7 +142,7 @@ def handle_guess_player(client):
 
     game_running = True
     client.send(str.encode("guess player"))
-    client.send(str.encode("\nWelcome to the \n\n" + welcome_text + "   game\n\nYou are the guess player.\nYou have to guess the word.\nYou have 5 lives.\n\nIf you get stuck, type 'hint' to get a short definition.\n\nYou may have to wait for the side player to give you a word."))
+    client.send(str.encode("\nWelcome to the \n\n" + welcome_text + "   game\n\nYou are the guess player.\nYou have to guess the word.\nYou have 5 lives.\n\nIf you get stuck, type 'hint' to get a short definition.\n\nYou may have to wait for the side player to give you a word.\nType reset to reset the game."))
 
     # wait for side player to give a word, if side player disconnects, game is over
     while not word or not description:
@@ -138,27 +155,42 @@ def handle_guess_player(client):
    
     display = "_" * len(word)
     client.send(str.encode("You can now guess the word: " + display + " " + str(limit) + " lives left"))
+    game_reply = ""
        
     while game_running:
 
         data = client.recv(2048)
-
         print("from client(" + data.decode("utf-8")+")")
 
         # guess player disconnected 
         if not data:
+           game_running = False
            break
+
+        #the game is over and ask if player wants to play again
+        if(game_reply.endswith("end of game")):
+            if(data.decode("utf-8") == "y"):
+                reset_game(client)
+                game_reply = "Your new word: " + "_" * len(word) + " " + str(limit) + " lives left"
+            else:
+                game_running = False
+                break
         
+        # guess player wants to reset the game
+        elif data.decode("utf-8") == "reset":
+            reset_game(client)
+            game_reply = "Your new word: " + "_" * len(word) + " " + str(limit) + " lives left"
+
         # guess player wants a hint
-        if data.decode("utf-8") == "hint":
-            reply = "Hint: " + description
+        elif data.decode("utf-8") == "hint":
+            game_reply = "Hint: " + description
 
         else:
-            reply = evaluate_guess(data.decode("utf-8"))
-         
+            game_reply = evaluate_guess(data.decode("utf-8"))
             
-        print(reply)
-        client.sendall(str.encode(reply))
+            
+        print(game_reply)
+        client.sendall(str.encode(game_reply))
 
 
     limit = 5
@@ -175,9 +207,9 @@ def handle_guess_player(client):
 
 def evaluate_guess(guess):
     global word
-    global game_running
     global display
     global limit
+    global already_guessed
 
     if len(guess.strip()) == 0 or len(guess.strip()) >= 2 or guess <= "9":
         return "\nInvalid Input, Try a letter\n" + display + " " + str(limit) + " lives left"
@@ -192,7 +224,6 @@ def evaluate_guess(guess):
                 display = display[:index] + guess + display[index + 1:]
 
         if "_" not in display:
-            game_running = False
             return "\nWinner! The word is: " + display + "\nend of game"
 
         return "\n" + display + " " + str(limit) + " lives left"
@@ -201,13 +232,33 @@ def evaluate_guess(guess):
         already_guessed.extend([guess])
         limit -= 1
         if limit == 0:
-            game_running = False
             return "\nLoser! The word was: " + word + "\nend of game"
 
         return "\n" + display + " " + str(limit) + " lives left"
 
-
-
+def reset_game(client):
+    global limit
+    global word
+    global already_guessed
+    global description
+    global display
+    global reset
+    global game_running
+ 
+    limit = 5
+    display = ""
+    word = ""
+    description = ""
+    already_guessed = []
+    reset = True
+    
+    while not word or not description:
+        time.sleep(1)
+        if side_player == -1:
+            game_running = False
+            client.send(str.encode("Side player is out - end of game"))
+            break
+    display = "_" * len(word)
 
 if __name__ == "__main__":
     main()
