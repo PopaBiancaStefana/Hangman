@@ -147,10 +147,10 @@ def handle_guess_player(client):
     # wait for side player to give a word, if side player disconnects, game is over
     while not word or not description:
         time.sleep(1)
-        if side_player == -1:
-            game_running = False
-            client.send(str.encode("Side player is out - end of game"))
-            break
+        # if side_player == -1:
+        #     game_running = False
+        #     client.send(str.encode("End of game"))
+        #     break
 
    
     display = "_" * len(word)
@@ -254,10 +254,10 @@ def reset_game(client):
     
     while not word or not description:
         time.sleep(1)
-        if side_player == -1:
-            game_running = False
-            client.send(str.encode("Side player is out - end of game"))
-            break
+        # if side_player == -1:
+        #     game_running = False
+        #     client.send(str.encode("End of game"))
+        #     break
     display = "_" * len(word)
 
 if __name__ == "__main__":
